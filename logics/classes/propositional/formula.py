@@ -275,7 +275,6 @@ class Formula(list):
         if language.is_metavariable_string(self[0]):
             if self[0] in subst_dict:
                 return subst_dict[self[0]]
-            raise ValueError(f'Metavariable {self[0]} not present in substitution dict given')
         # Non-schematic atomic
         return deepcopy(self)
 
@@ -337,6 +336,63 @@ class Formula(list):
         instance, subst_dict = new_formula.is_instance_of(schema_to_substitute, language, return_subst_dict=True)
         if instance:
             new_formula = schema_with.instantiate(language, subst_dict)
+
+        return new_formula
+    
+    def schematic_reduction(self, language, schema_to_substitute, schema_remove):
+        """Takes a Formula and two schematic Formula, and removes any instance of the second literal formula in
+        the instance of the first schema. Primarily for use in removing 1 side of a conjunction.
+
+        Will return a different Formula object, and not modify the original.
+
+        Parameters
+        ----------
+        language: logics.classes.propositional.Language or logics.classes.propositional.InfiniteLanguage
+            Instance of Language or InfiniteLanguage
+        schema_to_substitute: logics.classes.propositional.Formula
+            The schema of the subformula you wish to remove from
+        schema_with: logics.classes.propositional.Formula
+            The formula you wish to remove
+
+        Returns
+        -------
+        logics.classes.propositional.Formula
+            A *different* formula instance from the original
+
+        Examples
+        --------
+        >>> from logics.classes.propositional import Formula
+        >>> from logics.instances.propositional.languages import classical_language
+        >>> f = Formula(['∧', ['A'], ['B']])
+        >>> f.schematic_substitute(classical_language, f,
+        ...                                            Formula(['B']))
+        ['A']
+        """
+        if self.is_atomic:
+            new_formula = deepcopy(self)  # Atomic PredicateFormula are not equal to self[0]
+        else:
+            new_formula = self.__class__([self[0]])
+
+        # Molecular
+        if not self.is_atomic:
+            # If we find the formulas to remove, we want to keep the other side of the conjuction. So 'symbol' will represent that other side.
+            symbol = 3
+            for subelement in self[1:]:
+                symbol -= 1
+                # If conjunction and one of the sides is the one we want to remove, keep the other side
+                if subelement[0] == '∧' and subelement[1] == schema_remove:
+                    new_formula.append(subelement[2])
+                elif subelement[0] == '∧' and subelement[2] == schema_remove:
+                    new_formula.append(subelement[1])
+                # For the main operator of the premise, it likes to have both sides on their own, so we have to check if the entire 
+                # formula is the one we want to remove, and if it is a conjunction, and if so, keep the other side 'symbol'
+                elif len(subelement)==1 and subelement == schema_remove and self[0] == '∧':
+                    new_formula = self[symbol]
+                    break
+                elif isinstance(subelement, (x:=self.__class__)):
+                    new_formula.append(subelement.schematic_reduction(language, schema_to_substitute, schema_remove))
+                else:
+                    new_formula.append(subelement)
 
         return new_formula
 

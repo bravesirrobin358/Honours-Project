@@ -32,7 +32,7 @@ keyring==23.0.1
 MarkupSafe==1.1.1
 matplotlib-inline==0.2.1
 nest-asyncio==1.6.0
-packaging==20.7
+packaging==22
 parso==0.8.5
 pep517==0.10.0
 pexpect==4.9.0
