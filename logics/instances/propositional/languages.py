@@ -1,10 +1,11 @@
+import string
 from copy import deepcopy
 
 from logics.classes.propositional.language import Language, InfiniteLanguage
 
 # LANGUAGES FOR CLASSICAL LOGIC (and many non-classical)
 atomics = ['p', 'q', 'r', 's', 't']  # atomics will be any of them followed by an integer
-metavariables = ['A', 'B', 'C', 'D']
+metavariables = list(string.ascii_uppercase)
 constant_arity_dict = {'~': 1, '∧': 2, '∨': 2, '→': 2, '↔': 2}
 sentential_constants = ['⊥', '⊤']
 context_variables = ['Γ', 'Δ', 'Σ', 'Λ', 'Π', 'Θ']

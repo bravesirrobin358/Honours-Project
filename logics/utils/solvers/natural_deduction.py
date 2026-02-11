@@ -122,7 +122,7 @@ class NaturalDeductionSolver:
         goal = inference.conclusion
         derivation = Derivation([NaturalDeductionStep(content=p, justification='premise') for p in inference.premises])
         derivation = self._solve_derivation(derivation, goal)   # Actually solves the derivation (using some derived rules)
-        derivation = self._clean_derivation(derivation, inference)  # Erases unnecesary steps and replaces derived rules
+        #derivation = self._clean_derivation(derivation, inference)  # Erases unnecesary steps and replaces derived rules
         return derivation
 
     # ------------------------------------------------------------------------------------------------------------------
