@@ -1,0 +1,24 @@
+model_name: HuggingFace model identifier. Options:
+    - "google/flan-t5-small" (faster, less accurate)
+    - "google/flan-t5-base" (balanced)
+    - "google/flan-t5-large" (slower, more accurate)
+
+transformers library (from Hugging Face)
+torch (PyTorch - backend for running models)
+google/flan-t5-small or google/flan-t5-base (the actual pre-trained models)
+sentencepiece (tokenization, installed automatically with transformers)
+
+Paraphrasing to Standard Forms
+
+Flan-T5 is prompted to rewrite sentences into standardized patterns that match your rules
+Example: "You'll succeed assuming you work hard" → "If you work hard, you'll succeed"
+The model knows various ways to express the same logical relationship
+
+flan-t5-small (~300MB) - Fast, runs on any laptop
+flan-t5-base (~950MB) - Better quality, still runs locally
+flan-t5-large (~3GB) - Best quality, needs more RAM
+
+
+or
+spaCy + custom rules - no large model, deterministic, perfect for logical structure extraction where you need consistent formatting.
+
