@@ -1,4 +1,7 @@
-
+Install Ollama via Website or using this command:
+    winget install Ollama.Ollama
+Pull this version:
+    ollama pull llama3.1:8b
 
 
 ## Citations
