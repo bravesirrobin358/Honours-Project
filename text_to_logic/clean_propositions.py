@@ -3,7 +3,6 @@ import re
 
 class PropositionRegistry:
     def __init__(self, threshold=0.85):
-        # This model is small, fast, and runs entirely on your CPU/RAM
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
         self.registry = {}  # Format: { "P1": "The tenant pays rent" }
         self.threshold = threshold
