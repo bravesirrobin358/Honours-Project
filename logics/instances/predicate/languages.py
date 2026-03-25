@@ -1,14 +1,15 @@
 from copy import deepcopy
 
 from logics.classes.predicate.language import PredicateLanguage, InfinitePredicateLanguage, TruthPredicateLanguage
-
+import string
+alphabet = list(string.ascii_uppercase)
 # Classical predicate logic
 individual_constants = ['a', 'b', 'c', 'd', 'e']
 variables = ['x', 'y', 'z']
 individual_metavariables = ['α', 'β', 'γ', 'δ', 'ε']  # for rules, can be instantiated with either variables or ind constants
 variable_metavariables = ['χ', 'ψ', 'ω']
 quantifiers = ['∀', '∃']
-metavariables = ['A', 'B', 'C', 'D', 'E']  # These are formula metavariables
+metavariables = alphabet  # These are formula metavariables
 constant_arity_dict = {'~': 1, '∧': 2, '∨': 2, '→': 2, '↔': 2}
 predicate_letters = {"M": 1, "N": 1, 'P': 1, 'Q': 1, 'R': 2, 'S': 3, "T": 2}
 predicate_variables = {'W': 1, 'X': 1, 'Y': 1, 'Z': 2}  # These can be quantified over in second order languages

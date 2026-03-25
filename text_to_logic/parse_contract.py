@@ -1,7 +1,8 @@
 import ollama
 import json
 import re
-from clean_propositions import PropositionRegistry
+from text_to_logic.clean_propositions import PropositionRegistry
+
 
 
 class ParseContract:
@@ -162,6 +163,7 @@ class ParseContract:
             Constraints:
             - Return ONLY a JSON list of strings.
             - Decompose conjunctions into separate atoms where possible.
+            - Decompose disjunctions into separate atoms where possible.
             - Keep each atom minimal and declarative.
             - Use subject '{subject}' when a pronoun is implied.
             - Prefer positive canonical atoms (negation is handled separately).
@@ -196,7 +198,10 @@ class ParseContract:
     def _expr_from_vars(var_names):
         if len(var_names) == 1:
             return var_names[0]
-        return "(" + " ∧ ".join(var_names) + ")"
+        formula = var_names[0]
+        for i in var_names[1:]:
+            formula = "(" + formula + " ∧ " + i + ")"
+        return formula
 
     def _register_atoms(self, atom_texts):
         ordered_mapping = {}
@@ -288,7 +293,10 @@ class ParseContract:
 
                 if premise_vars and consequence_vars:
                     lhs_terms = [role_var] + [f"¬{v}" for v in premise_vars]
-                    lhs_expr = "(" + " ∧ ".join(lhs_terms) + ")" if len(lhs_terms) > 1 else lhs_terms[0]
+                    formula = lhs_expr[0]
+                    if len(lhs_terms) > 1:
+                        for i in lhs_terms[1:]:
+                            formula = "(" + formula + " ∧ " + i + ")"
                     rhs_expr = self._expr_from_vars(consequence_vars)
                     formulas.append(f"{lhs_expr} -> ¬{rhs_expr}")
                 continue
@@ -396,14 +404,18 @@ class ParseContract:
         return self._llm_fallback_parse(clause_text)
     
 
-if __name__ == "__main__":
+def run():
     parser = ParseContract()
 
     # Testing similarity normalization
-    clauses = [
-        "If Amy were a tall and fair actress from the mainstream film industry, she would have won the best actress award. She is not a tall and fair actress since she has not won the best actress award."
+    '''clauses = [
+        "If Amy were a tall and fair actress from the mainstream film industry, she would have won the best actress award. She is not a tall and fair since she has not won the best actress award."
     ]
-
+    '''
+    clauses = [
+        "I am tall or I am blue or I am skinny. I am not skinny. I am tall or I am blue."
+    ]
+    #If Amy was tall, she could fly. 
     # clauses = [
     #     "Architects that appreciate historic architecture are able to design very innovative modern buildings. Without having an appreciation for historic architecture, an architect can never design a famous modern building."
     # ]
@@ -413,3 +425,4 @@ if __name__ == "__main__":
         result = parser.process_clause(text)
         print(f"Formula: {result['formula']}")
         print(f"Current Registry: {json.dumps(result['variable_map'], indent=2)}")
+    return (result['formula'],result['variable_map'])
