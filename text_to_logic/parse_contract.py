@@ -402,7 +402,7 @@ class ParseContract:
         if parsed is not None:
             return parsed
         return self._llm_fallback_parse(clause_text)
-    
+
 
 def run():
     parser = ParseContract()
@@ -415,7 +415,7 @@ def run():
     clauses = [
         "I am tall or I am blue or I am skinny. I am not skinny. I am tall or I am blue."
     ]
-    #If Amy was tall, she could fly. 
+    #If Amy was tall, she could fly.
     # clauses = [
     #     "Architects that appreciate historic architecture are able to design very innovative modern buildings. Without having an appreciation for historic architecture, an architect can never design a famous modern building."
     # ]
