@@ -3,6 +3,8 @@ import string
 from logics.utils.solvers.natural_deduction import classical_natural_deduction_solver
 from logics.utils.parsers import classical_parser
 from logics.instances.propositional.many_valued_semantics import ST_mvl_semantics as ST
+
+
 formula,variable_map = parse_contract.run()
 rewritten_initial_conditions = formula.replace("\n"," / ").replace(" / ",", ",formula.count("\n")-1).replace("->","→").translate(str.maketrans("⋀⋁¬","∧∨~"))
 alphabet = list(string.ascii_uppercase)
@@ -12,6 +14,7 @@ for i in ls:
 
 print("formula: ", rewritten_initial_conditions)
 
+# rewritten_initial_conditions = "((T∨B)∨S)"
 
 
 parsed = classical_parser.parse(rewritten_initial_conditions)

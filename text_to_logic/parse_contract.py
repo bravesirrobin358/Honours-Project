@@ -1,10 +1,10 @@
 import ollama
 import json
 import re
-from text_to_logic.clean_propositions import PropositionRegistry
-
-
-
+try:
+    from text_to_logic.clean_propositions import PropositionRegistry
+except ModuleNotFoundError:
+    from clean_propositions import PropositionRegistry
 class ParseContract:
     def __init__(self, model_name="llama3.1"):
         self.model = model_name
@@ -263,7 +263,7 @@ class ParseContract:
                 antecedent = [role_var] + condition_vars
                 lhs_expr = self._expr_from_vars(antecedent)
                 rhs_expr = self._expr_from_vars(action_vars)
-                formulas.append(f"{lhs_expr} -> {rhs_expr}")
+                formulas.append(f"({lhs_expr} -> {rhs_expr})")
                 continue
 
             without_match = re.match(r"^without\s+(.+?),\s*(.+)$", normalized_sentence, flags=re.IGNORECASE)
@@ -293,12 +293,12 @@ class ParseContract:
 
                 if premise_vars and consequence_vars:
                     lhs_terms = [role_var] + [f"¬{v}" for v in premise_vars]
-                    formula = lhs_expr[0]
+                    formula = lhs_terms[0]
                     if len(lhs_terms) > 1:
                         for i in lhs_terms[1:]:
                             formula = "(" + formula + " ∧ " + i + ")"
                     rhs_expr = self._expr_from_vars(consequence_vars)
-                    formulas.append(f"{lhs_expr} -> ¬{rhs_expr}")
+                    formulas.append(f"({formula} -> ¬{rhs_expr})")
                 continue
 
             if lowered.startswith("if ") and "," in normalized_sentence:
@@ -353,7 +353,7 @@ class ParseContract:
             if rhs_neg:
                 rhs_expr = f"¬{rhs_expr}" if len(rhs_vars) == 1 else f"¬{rhs_expr}"
 
-            rendered_formulas.append(f"{lhs_expr} -> {rhs_expr}")
+            rendered_formulas.append(f"({lhs_expr} -> {rhs_expr})")
 
         if not rendered_formulas:
             return None
@@ -362,6 +362,23 @@ class ParseContract:
             "formula": "\n".join(rendered_formulas),
             "variable_map": mapping
         }
+
+    @classmethod
+    def _binarize_logic(cls, formula):
+        pattern_and_or = re.compile(r'([A-Za-z0-9_¬~]+|\([^()]+\))\s*(∧|∨)\s*([A-Za-z0-9_¬~]+|\([^()]+\))\s*(∧|∨)\s*([A-Za-z0-9_¬~]+|\([^()]+\))')
+        while True:
+            new_formula = pattern_and_or.sub(r'((\1 \2 \3) \4 \5)', formula)
+            if new_formula == formula:
+                break
+            formula = new_formula
+            
+        pattern_impl = re.compile(r'([A-Za-z0-9_¬~]+|\([^()]+\))\s*(->|<->)\s*([A-Za-z0-9_¬~]+|\([^()]+\))\s*(->|<->)\s*([A-Za-z0-9_¬~]+|\([^()]+\))')
+        while True:
+            new_formula = pattern_impl.sub(r'((\1 \2 \3) \4 \5)', formula)
+            if new_formula == formula:
+                break
+            formula = new_formula
+        return formula
 
     def _llm_fallback_parse(self, clause_text):
         extract_prompt = f"""
@@ -388,6 +405,7 @@ class ParseContract:
             Use operators: ¬, ∧, ∨, ->, <->.
             For 'since' and 'because', use cause -> claim.
             Return ONLY the formula string.
+            Ensure ALL operations are strictly binary and fully parenthesized. Every binary operation (e.g., ∧, ∨, ->, <->) MUST have exactly two operands and be enclosed in exactly one set of parentheses. For example, 'A ∨ B ∨ C' MUST be written as '((A ∨ B) ∨ C)' or '(A ∨ (B ∨ C))'. Never put three or more variables without nested parentheses.
             Text: "{clause_text}"
             """
         formula = self._llm_call(formula_prompt, json_mode=False).strip()
@@ -399,10 +417,11 @@ class ParseContract:
 
     def process_clause(self, clause_text):
         parsed = self._rule_based_parse(clause_text)
-        if parsed is not None:
-            return parsed
-        return self._llm_fallback_parse(clause_text)
-    
+        if parsed is None:
+            parsed = self._llm_fallback_parse(clause_text)
+        parsed["formula"] = self._binarize_logic(parsed["formula"])
+        return parsed
+
 
 def run():
     parser = ParseContract()
@@ -415,10 +434,25 @@ def run():
     clauses = [
         "I am tall or I am blue or I am skinny. I am not skinny. I am tall or I am blue."
     ]
-    #If Amy was tall, she could fly. 
-    # clauses = [
-    #     "Architects that appreciate historic architecture are able to design very innovative modern buildings. Without having an appreciation for historic architecture, an architect can never design a famous modern building."
-    # ]
+    #If Amy was tall, she could fly.
+#     clauses = [
+#   """The Claim does not adequately define the issues.
+# The Claim does not provide sufficient notice to the parties and the Court as to what activities of the defendants are alleged to infringe the 406 Patent.
+# The Claim does not enable the defendants to plead intelligently in response.
+# Two different words, "system" and "service", are used in the Claim without a defined term for each.
+# The Claim does not clearly state whether each defendant is alleged to offer E2M, ATIS Alert, and TEAM, or if these products/services are provided by only one of the defendants.
+# In Stryker, there was a fixed starting point for the defendants with specific allegations of infringement.
+# In LeddarTech, the defendant knew that its product was alleged to infringe and was provided with detailed characteristics supporting the claims for infringement.
+# The Claim refers to three systems or services using language of "including", "and/or", and "for example".
+# A response to a demand for particulars cannot include language that broadens the nature of the allegations, such as "without limiting" or "without prejudice".
+# If other grounds are contemplated for claimed relief, defendants are entitled to know what they are.
+# Plaintiffs must clearly state what they do know about the defendants' alleged infringing activities.
+# The Claim does not answer fundamental questions about which product/service of each defendant is alleged to infringe which claims of the 406 Patent.
+# Allowing undefined "systems and services" in the Claim, combined with expansive language, does not give defendants clarity on their alleged infringing activities or what claims are stated to be infringed by each product/service.
+# A statement of defence would inevitably be a blanket denial if the Claim is allowed to stand as it is.
+# The Claim, as expanded by the response to demand for particulars, would encompass every product or service sold by the defendants relating to lift devices since 2017.
+# Permitting such a pleading to stand would make documentary and oral discovery for the defendants unfair and unmanageable."""
+#     ]
 
     for i, text in enumerate(clauses):
         print(f"\n--- Analyzing Clause {i+1} ---")
