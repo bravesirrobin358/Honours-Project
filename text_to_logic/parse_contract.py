@@ -1,9 +1,10 @@
 import ollama
 import json
 import re
-from text_to_logic.clean_propositions import PropositionRegistry
-
-
+try:
+    from text_to_logic.clean_propositions import PropositionRegistry
+except ImportError:
+    from clean_propositions import PropositionRegistry
 
 class ParseContract:
     def __init__(self, model_name="llama3.1"):
@@ -426,3 +427,5 @@ def run():
         print(f"Formula: {result['formula']}")
         print(f"Current Registry: {json.dumps(result['variable_map'], indent=2)}")
     return (result['formula'],result['variable_map'])
+
+run()
