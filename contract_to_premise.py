@@ -1,7 +1,7 @@
 # extract statements from pdfs
 from pypdf import PdfReader
 import ollama
-from parse_contract import LLMProcessingPremise
+from premise_to_proposition import LLMProcessingPremise
 import json
 
 def read_contact(filename):
@@ -38,13 +38,6 @@ def extract_statements(section_text):
         else:
             current_statement += " " + line.strip()
     return statements
-
-text = read_contact("..\\T-2620-25_20260216_OR-OM_E-A_O_TOR_20260216093845_HR1.pdf")
-section_text = extract_section(text)
-statements = extract_statements(section_text)
-print("Extracted Statements:")
-for s in statements:
-    print(s)
 
 # send the statements to Ollama to extract propostions from them
 def extract_propositions_with_ollama(statements, model="llama3.1"):

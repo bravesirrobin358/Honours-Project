@@ -1,9 +1,18 @@
-from text_to_logic import clean_propositions, parse_contract
+from utils.extract_statement import extract_section, extract_statements, read_contact
+import premise_to_proposition
 import string
 from logics.utils.solvers.natural_deduction import classical_natural_deduction_solver
 from logics.utils.parsers import classical_parser
 from logics.instances.propositional.many_valued_semantics import ST_mvl_semantics as ST
-formula,variable_map = parse_contract.run()
+
+text = read_contact(".\T-2620-25_20260216_OR-OM_E-A_O_TOR_20260216093845_HR1.pdf")
+section_text = extract_section(text)
+statements = extract_statements(section_text)
+print("Extracted Statements:")
+for s in statements:
+    print(s)
+
+formula,variable_map = premise_to_proposition.run(' '.join(statements))
 rewritten_initial_conditions = formula.replace("\n"," / ").replace(" / ",", ",formula.count("\n")-1).replace("->","→").translate(str.maketrans("⋀⋁¬","∧∨~"))
 alphabet = list(string.ascii_uppercase)
 ls = sorted(variable_map.keys())

@@ -1,7 +1,7 @@
 import ollama
 import json
 import re
-from clean_propositions import PropositionRegistry
+from utils.clean_propositions import PropositionRegistry
 
 class LLMProcessingPremise:
     def __init__(self, model_name="llama3.1"):
