@@ -70,21 +70,3 @@ def extract_propositions_with_ollama(statements, model="llama3.1"):
         extracted_propositions.append(None)
 
     return extracted_propositions
-
-propositions_list = extract_propositions_with_ollama(statements, model="llama3.1")
-
-if propositions_list and propositions_list[0]:
-    parser = LLMProcessingPremise(model_name="llama3.1")
-
-    print("\n--- Extracted Propositions ---")
-    print(propositions_list[0])
-
-    print("\n--- Parsing Propositions into Logic ---")
-    result = parser.process_clause(propositions_list[0], use_llm=True)
-
-    if result:
-        print(f"Formula: \n{result['formula']}")
-        print(f"Variables: \n{json.dumps(result['variable_map'], indent=2)}")
-    else:
-        print("Could not parse the propositions into a logical formula.")
-

@@ -5,14 +5,16 @@ from logics.utils.solvers.natural_deduction import classical_natural_deduction_s
 from logics.utils.parsers import classical_parser
 from logics.instances.propositional.many_valued_semantics import ST_mvl_semantics as ST
 
-text = read_contact(".\T-2620-25_20260216_OR-OM_E-A_O_TOR_20260216093845_HR1.pdf")
+text = read_contact(".\\T-2620-25_20260216_OR-OM_E-A_O_TOR_20260216093845_HR1.pdf")
 section_text = extract_section(text)
 statements = extract_statements(section_text)
 print("Extracted Statements:")
 for s in statements:
     print(s)
 
-formula,variable_map = premise_to_proposition.run(' '.join(statements))
+LLMProcessingPremise = premise_to_proposition.LLMProcessingPremise(model_name="llama3.1")
+result = LLMProcessingPremise.process_clause(' '.join(statements), use_llm=True)
+formula, variable_map = result["formula"], result["variable_map"]
 rewritten_initial_conditions = formula.replace("\n"," / ").replace(" / ",", ",formula.count("\n")-1).replace("->","→").translate(str.maketrans("⋀⋁¬","∧∨~"))
 alphabet = list(string.ascii_uppercase)
 ls = sorted(variable_map.keys())
