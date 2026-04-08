@@ -1,12 +1,9 @@
 import ollama
 import json
 import re
-try:
-    from text_to_logic.clean_propositions import PropositionRegistry
-except ImportError:
-    from clean_propositions import PropositionRegistry
+from clean_propositions import PropositionRegistry
 
-class ParseContract:
+class LLMProcessingPremise:
     def __init__(self, model_name="llama3.1"):
         self.model = model_name
         self.registery = PropositionRegistry()
@@ -364,6 +361,17 @@ class ParseContract:
             "variable_map": mapping
         }
 
+    def _post_process_formula(self, formula):
+        prompt = f"""
+        Fix the following propositional logic formula so that there are never three or more variables without nested parentheses (e.g., A V B V C should be (A V B) V C).
+        Only return the fixed formula string. Do not add any other text.
+        Also, ensure that the formula uses consistent variable names that match the provided mapping.
+        If a variable in the formula does not match any in the mapping, replace it with an alphabet letter (A, B, C, etc.) that is not already used in the mapping.
+
+        Formula: "{formula}"
+        """
+        return self._llm_call(prompt, json_mode=False).strip()
+
     def _llm_fallback_parse(self, clause_text):
         extract_prompt = f"""
                 Extract atomic propositions from this text.
@@ -371,6 +379,7 @@ class ParseContract:
                 - Split conjunctions into separate atoms where semantically valid.
                 - Keep atoms as positive canonical statements when possible.
                 - Resolve obvious pronouns to named entities in context.
+                - If there are two atoms that are comparable (synonyms), merge them into a single atom.
                 Return ONLY a JSON list of strings.
                 Text: "{clause_text}"
                 """
@@ -383,6 +392,8 @@ class ParseContract:
         mapping = self._register_atoms(raw_atoms)
         mapping_str = ", ".join([f"{var}: {text}" for var, text in mapping.items()])
 
+        print(f'--- LLM Extracted Atoms ---\n{json.dumps(mapping, indent=2)}\n')
+
         formula_prompt = f"""
             Translate the following clause into propositional logic.
             Use ONLY these variable labels: {mapping_str}
@@ -392,21 +403,24 @@ class ParseContract:
             Text: "{clause_text}"
             """
         formula = self._llm_call(formula_prompt, json_mode=False).strip()
+        formula = self._post_process_formula(formula)
 
         return {
             "formula": formula,
             "variable_map": mapping
         }
 
-    def process_clause(self, clause_text):
-        parsed = self._rule_based_parse(clause_text)
-        if parsed is not None:
-            return parsed
-        return self._llm_fallback_parse(clause_text)
+    def process_clause(self, clause_text, use_llm=False):
+        if not use_llm:
+            parsed = self._rule_based_parse(clause_text)
+            if parsed is not None:
+                return parsed
+        else:
+            return self._llm_fallback_parse(clause_text)
 
 
-def run():
-    parser = ParseContract()
+def run(clause_text=None):
+    parser = LLMProcessingPremise()
 
     # Testing similarity normalization
     '''clauses = [
@@ -416,16 +430,10 @@ def run():
     clauses = [
         "I am tall or I am blue or I am skinny. I am not skinny. I am tall or I am blue."
     ]
-    #If Amy was tall, she could fly.
-    # clauses = [
-    #     "Architects that appreciate historic architecture are able to design very innovative modern buildings. Without having an appreciation for historic architecture, an architect can never design a famous modern building."
-    # ]
 
     for i, text in enumerate(clauses):
         print(f"\n--- Analyzing Clause {i+1} ---")
-        result = parser.process_clause(text)
+        result = parser.process_clause(text if clause_text is None else clause_text)
         print(f"Formula: {result['formula']}")
         print(f"Current Registry: {json.dumps(result['variable_map'], indent=2)}")
     return (result['formula'],result['variable_map'])
-
-run()
