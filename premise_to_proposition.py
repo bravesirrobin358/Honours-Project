@@ -202,11 +202,14 @@ class LLMProcessingPremise:
         return formula
 
     def _register_atoms(self, atom_texts):
+        # We need to map variables, but also keep track of ALL synonymous text for the LLM
         ordered_mapping = {}
         for atom in atom_texts:
             var_name = self.registery.get_variable(atom)
             if var_name not in ordered_mapping:
-                ordered_mapping[var_name] = atom
+                ordered_mapping[var_name] = [atom]
+            elif atom not in ordered_mapping[var_name]:
+                ordered_mapping[var_name].append(atom)
         return ordered_mapping
 
     def _rule_based_parse(self, clause_text):
@@ -365,8 +368,11 @@ class LLMProcessingPremise:
         prompt = f"""
         Fix the following propositional logic formula to strictly comply with standard parser rules:
         1. Every single binary operation (AND, OR, IMPLIES, IFF) MUST be strictly enclosed in its own set of parentheses.
-        2. There must NEVER be three or more terms joined without nested parentheses (e.g., A ∧ B ∧ C must become (A ∧ (B ∧ C))).
+        2. There must NEVER be three or more terms joined without nested parentheses.
+           Example ERROR: A ∧ B ∧ C -> Must be: ((A ∧ B) ∧ C)
+           Example ERROR: ~A ∧ ~B ∧ ~C -> Must be: ((~A ∧ ~B) ∧ ~C)
         3. Do NOT place parentheses around negated single variables. Use ~A instead of (~A).
+        4. NEVER output consecutive top-level binary operators within parenthesis like (A ∧ B ∧ C). Break them into pairs recursively.
 
         Only return the fixed formula string. Do not add any other text.
         Also, ensure that the formula uses consistent variable names that match the provided mapping.
@@ -385,7 +391,7 @@ class LLMProcessingPremise:
                 - Keep each atom minimal and declarative.
                 - Keep atoms as positive canonical statements when possible (negation is handled separately).
                 - Resolve obvious pronouns to named entities in context.
-                - If there are two atoms that are comparable (synonyms), merge them into a single atom.
+                - Do NOT merge synonymous atoms. Extract all distinct verbalized propositions exactly as written.
                 Return ONLY a JSON object with a key "atoms" containing a list of strings.
                 Text: "{clause_text}"
                 """
@@ -403,13 +409,30 @@ class LLMProcessingPremise:
         raw_atoms = [self._clean_text(atom) for atom in raw_atoms if isinstance(atom, str) and atom.strip()]
 
         mapping = self._register_atoms(raw_atoms)
-        mapping_str = ", ".join([f"{var}: {text}" for var, text in mapping.items()])
+        mapping_str = ",\n".join([f"{var}: {' OR '.join(texts)}" for var, texts in mapping.items()])
 
-        print(f'--- LLM Extracted Atoms ---\n{json.dumps(mapping, indent=2)}\n')
+        final_mapping = {var: texts[0] for var, texts in mapping.items()}
+
+        # take the atoms and send it to SentenceTransformer('all-MiniLM-L6-v2') to cluster them based on semantic similarity. If they are above a certain threshold, we will treat them as the same variable in the formula.
+        clustered = self.registery.cluster_atoms(raw_atoms, threshold=self.registery.threshold)
+
+        ## Now we need to update the mapping to reflect the clustering. If multiple atoms are clustered together, they should all map to the same variable.
+        cluster_to_var = {}
+        for atom in clustered:
+            var_name = self.registery.get_variable(atom)
+            cluster_to_var[atom] = var_name
+        final_mapping = {}
+        for atom in raw_atoms:
+            var_name = cluster_to_var.get(atom, self.registery.get_variable(atom))
+            final_mapping[var_name] = atom
+
+        print(f'--- LLM Extracted Atoms ---\n{json.dumps(final_mapping, indent=2)}\n')
 
         formula_prompt = f"""
             Translate the following clause into propositional logic.
-            Use ONLY these variable labels: {mapping_str}
+            Use ONLY these variable labels:
+            {mapping_str}
+
             Use operators: ¬, ∧, ∨, ->, <->.
             For 'since' and 'because', use cause -> claim.
             Return ONLY the formula string.
@@ -420,7 +443,7 @@ class LLMProcessingPremise:
 
         return {
             "formula": formula,
-            "variable_map": mapping
+            "variable_map": final_mapping
         }
 
     def process_clause(self, clause_text, use_llm=False):
