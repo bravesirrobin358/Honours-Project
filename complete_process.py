@@ -4,6 +4,7 @@ import string
 from logics.utils.solvers.natural_deduction import classical_natural_deduction_solver
 from logics.utils.parsers import classical_parser
 from logics.instances.propositional.many_valued_semantics import ST_mvl_semantics as ST
+import json
 
 text = read_contact(".\\T-2620-25_20260216_OR-OM_E-A_O_TOR_20260216093845_HR1.pdf")
 section_text = extract_section(text)
@@ -16,12 +17,17 @@ LLMProcessingPremise = premise_to_proposition.LLMProcessingPremise(model_name="l
 result = LLMProcessingPremise.process_clause(' '.join(statements), use_llm=True)
 formula, variable_map = result["formula"], result["variable_map"]
 rewritten_initial_conditions = formula.replace("\n"," / ").replace(" / ",", ",formula.count("\n")-1).replace("->","→").translate(str.maketrans("⋀⋁¬","∧∨~"))
-alphabet = list(string.ascii_uppercase)
-ls = sorted(variable_map.keys())
+alphabet = [c for c in string.ascii_uppercase if c not in ('V', 'F', 'T')]
+ls = sorted(variable_map.keys(), key=lambda x: int(x[1:]), reverse=True)
+alphabet_mapping = {}
 for i in ls:
-    rewritten_initial_conditions = rewritten_initial_conditions.replace(i,alphabet[int(i[1:])-1])
+    new_var = alphabet[int(i[1:])-1]
+    rewritten_initial_conditions = rewritten_initial_conditions.replace(i, new_var)
+    alphabet_mapping[new_var] = variable_map[i]
 
 print("formula: ", rewritten_initial_conditions)
+print("mapping: ")
+print(json.dumps(alphabet_mapping, indent=2))
 
 
 

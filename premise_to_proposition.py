@@ -363,7 +363,11 @@ class LLMProcessingPremise:
 
     def _post_process_formula(self, formula):
         prompt = f"""
-        Fix the following propositional logic formula so that there are never three or more variables without nested parentheses (e.g., A V B V C should be (A V B) V C).
+        Fix the following propositional logic formula to strictly comply with standard parser rules:
+        1. Every single binary operation (AND, OR, IMPLIES, IFF) MUST be strictly enclosed in its own set of parentheses.
+        2. There must NEVER be three or more terms joined without nested parentheses (e.g., A ∧ B ∧ C must become (A ∧ (B ∧ C))).
+        3. Do NOT place parentheses around negated single variables. Use ~A instead of (~A).
+
         Only return the fixed formula string. Do not add any other text.
         Also, ensure that the formula uses consistent variable names that match the provided mapping.
         If a variable in the formula does not match any in the mapping, replace it with an alphabet letter (A, B, C, etc.) that is not already used in the mapping.
@@ -376,14 +380,23 @@ class LLMProcessingPremise:
         extract_prompt = f"""
                 Extract atomic propositions from this text.
                 Rules:
-                - Split conjunctions into separate atoms where semantically valid.
-                - Keep atoms as positive canonical statements when possible.
+                - Decompose conjunctions into separate atoms where possible.
+                - Decompose disjunctions into separate atoms where possible.
+                - Keep each atom minimal and declarative.
+                - Keep atoms as positive canonical statements when possible (negation is handled separately).
                 - Resolve obvious pronouns to named entities in context.
                 - If there are two atoms that are comparable (synonyms), merge them into a single atom.
-                Return ONLY a JSON list of strings.
+                Return ONLY a JSON object with a key "atoms" containing a list of strings.
                 Text: "{clause_text}"
                 """
-        raw_atoms = json.loads(self._llm_call(extract_prompt))
+
+        raw_response = self._llm_call(extract_prompt)
+        try:
+            parsed_json = json.loads(raw_response)
+            raw_atoms = parsed_json.get("atoms", [])
+        except json.JSONDecodeError:
+            print(f"Failed to parse LLM response as JSON: {raw_response}")
+            raw_atoms = []
 
         if not isinstance(raw_atoms, list):
             raw_atoms = []
@@ -433,7 +446,7 @@ def run(clause_text=None):
 
     for i, text in enumerate(clauses):
         print(f"\n--- Analyzing Clause {i+1} ---")
-        result = parser.process_clause(text if clause_text is None else clause_text)
+        result = parser.process_clause(text if clause_text is None else clause_text, use_llm=True)
         print(f"Formula: {result['formula']}")
         print(f"Current Registry: {json.dumps(result['variable_map'], indent=2)}")
     return (result['formula'],result['variable_map'])
