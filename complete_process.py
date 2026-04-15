@@ -5,9 +5,17 @@ from logics.utils.solvers.natural_deduction import classical_natural_deduction_s
 from logics.utils.parsers import classical_parser
 from logics.instances.propositional.many_valued_semantics import ST_mvl_semantics as ST
 import json
+from logics.instances.propositional.languages import classical_language
+import logics
+import sys
 
-text = read_contact(".\\T-2620-25_20260216_OR-OM_E-A_O_TOR_20260216093845_HR1.pdf")
-section_text = extract_section(text)
+file = "shorter.pdf" if not sys.argv[1:] else sys.argv[1]
+if file.endswith(".txt"):
+    with open(file) as f:
+        section_text = f.read()
+else:
+    text = read_contact(file)
+    section_text = extract_section(text)
 statements = extract_statements(section_text)
 print("Extracted Statements:")
 for s in statements:
@@ -16,21 +24,17 @@ for s in statements:
 LLMProcessingPremise = premise_to_proposition.LLMProcessingPremise(model_name="llama3.1")
 result = LLMProcessingPremise.process_clause(' '.join(statements), use_llm=True)
 formula, variable_map = result["formula"], result["variable_map"]
-rewritten_initial_conditions = formula.replace("\n"," / ").replace(" / ",", ",formula.count("\n")-1).replace("->","→").translate(str.maketrans("⋀⋁¬","∧∨~"))
-alphabet = [c for c in string.ascii_uppercase if c not in ('V', 'F', 'T')]
-ls = sorted(variable_map.keys(), key=lambda x: int(x[1:]), reverse=True)
-alphabet_mapping = {}
-for i in ls:
-    new_var = alphabet[int(i[1:])-1]
-    rewritten_initial_conditions = rewritten_initial_conditions.replace(i, new_var)
-    alphabet_mapping[new_var] = variable_map[i]
+rewritten_initial_conditions = formula.replace("\n"," / ").replace(" / ",", ",formula.count(" / ")-1).replace("->","→").translate(str.maketrans("⋀⋁¬","∧∨~"))
 
 print("formula: ", rewritten_initial_conditions)
 print("mapping: ")
-print(json.dumps(alphabet_mapping, indent=2))
+print(json.dumps(variable_map, indent=2))
 
 
 
+
+logics.instances.predicate.languages.metavariables = list(variable_map.keys())
+logics.instances.propositional.languages.metavariables = list(variable_map.keys())
 parsed = classical_parser.parse(rewritten_initial_conditions)
 is_valid = ST.is_valid(parsed)
 if not is_valid:
@@ -49,7 +53,7 @@ unused_formulas = [derivation[i].content for i in unused_args]
 
 print("Propositional map:\n",variable_map)
 
-from logics.instances.propositional.languages import classical_language
+
 print("\nSimplified version:")
 
 # Find and all instances of the unused formulas and remove them. Also remove any premises that consist entirely of unused formulas.

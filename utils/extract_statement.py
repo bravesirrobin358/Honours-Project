@@ -3,8 +3,10 @@ from pypdf import PdfReader
 import ollama
 from premise_to_proposition import LLMProcessingPremise
 import json
+import os
 
 def read_contact(filename):
+    print(os.getcwd())
     reader = PdfReader(filename)
     text = ""
     for page in reader.pages:
@@ -14,10 +16,10 @@ def read_contact(filename):
 # we want to get the text within the section "III. Analysis"
 def extract_section(text):
     # find the start and end positions of the section
-    start_pos = text.find("III. Analysis")
+    start_pos = text.find("I. Overview")
     if start_pos == -1:
         return []
-    end_pos = text.find("IV", start_pos)
+    end_pos = text.find("JUDGMENT in T-1041-23", start_pos)
     if end_pos == -1:
         end_pos = len(text)
     # get the text within the section
@@ -37,6 +39,7 @@ def extract_statements(section_text):
             current_statement = line.strip()
         else:
             current_statement += " " + line.strip()
+    statements.append(current_statement.strip())   
     return statements
 
 # send the statements to Ollama to extract propostions from them

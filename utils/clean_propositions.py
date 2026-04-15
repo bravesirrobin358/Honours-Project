@@ -2,7 +2,7 @@ from sentence_transformers import SentenceTransformer, util
 import re
 
 class PropositionRegistry:
-    def __init__(self, threshold=0.55):
+    def __init__(self, threshold=0.85):
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
         self.registry = {}  # Format: { "P1": "The tenant pays rent" }
         self.threshold = threshold
@@ -40,6 +40,8 @@ class PropositionRegistry:
                 for j in range(i + 1, len(raw_atoms)):
                     if j not in visited_map and cosine_scores[i][j].item() > threshold:
                         visited_map[j] = raw_atoms[i]
+                    else:
+                        pass
 
         return list(set(canonical_raw))
 

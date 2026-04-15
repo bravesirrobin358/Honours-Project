@@ -1,6 +1,6 @@
 # Pre processing Text
 
-I will illistrate how we clean up the inputted text to receive the best performance from Ollama.
+I will illustrate how we clean up the inputted text to receive the best performance from Ollama.
 
 Throughout this step by step explaination, I will illistrate how an inputted clause (below) changes before being used to prompt.
 
@@ -135,3 +135,5 @@ Return:
 
 ## Ollama gives local atoms, and post-processing restores global meaning by variable mapping + rule templates + negation reapplication.
 
+# Execution:
+'python complete_process.py <filepath>'
