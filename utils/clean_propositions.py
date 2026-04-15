@@ -20,6 +20,31 @@ class PropositionRegistry:
         cleaned = re.sub(r"\s+", " ", cleaned)
         return cleaned.strip()
 
+    def cluster_atoms(self, raw_atoms, threshold=0.55):
+        if len(raw_atoms) <= 1:
+            return raw_atoms
+
+        embeddings = self.model.encode(raw_atoms, convert_to_tensor=True)
+        cosine_scores = util.cos_sim(embeddings, embeddings)
+
+        canonical_raw = []
+        visited_map = {}
+
+        for i in range(len(raw_atoms)):
+            if i in visited_map:
+                canonical_raw.append(visited_map[i])
+            else:
+                visited_map[i] = raw_atoms[i]
+                canonical_raw.append(raw_atoms[i])
+                # Mark any similar future atoms to map to this one
+                for j in range(i + 1, len(raw_atoms)):
+                    if j not in visited_map and cosine_scores[i][j].item() > threshold:
+                        visited_map[j] = raw_atoms[i]
+                    else:
+                        pass
+
+        return list(set(canonical_raw))
+
     def get_variable(self, text):
         if not self.registry:
             var_name = f"P{len(self.registry) + 1}"
@@ -29,10 +54,10 @@ class PropositionRegistry:
         # Compare new text against everything in the registry
         sentences = list(self.registry.values())
         var_names = list(self.registry.keys())
-        
+
         new_emb = self.model.encode(text, convert_to_tensor=True)
         old_embs = self.model.encode(sentences, convert_to_tensor=True)
-        
+
         # Find the highest similarity score
         cosine_scores = util.cos_sim(new_emb, old_embs)[0]
         adjusted_scores = cosine_scores.clone()

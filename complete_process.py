@@ -1,19 +1,40 @@
-from text_to_logic import clean_propositions, parse_contract
+from utils.extract_statement import extract_section, extract_statements, read_contact
+import premise_to_proposition
 import string
 from logics.utils.solvers.natural_deduction import classical_natural_deduction_solver
 from logics.utils.parsers import classical_parser
 from logics.instances.propositional.many_valued_semantics import ST_mvl_semantics as ST
-formula,variable_map = parse_contract.run()
-rewritten_initial_conditions = formula.replace("\n"," / ").replace(" / ",", ",formula.count("\n")-1).replace("->","→").translate(str.maketrans("⋀⋁¬","∧∨~"))
-alphabet = list(string.ascii_uppercase)
-ls = sorted(variable_map.keys())
-for i in ls:
-    rewritten_initial_conditions = rewritten_initial_conditions.replace(i,alphabet[int(i[1:])-1])
+import json
+from logics.instances.propositional.languages import classical_language
+import logics
+import sys
+
+file = "shorter.pdf" if not sys.argv[1:] else sys.argv[1]
+if file.endswith(".txt"):
+    with open(file) as f:
+        section_text = f.read()
+else:
+    text = read_contact(file)
+    section_text = extract_section(text)
+statements = extract_statements(section_text)
+print("Extracted Statements:")
+for s in statements:
+    print(s)
+
+LLMProcessingPremise = premise_to_proposition.LLMProcessingPremise(model_name="llama3.1")
+result = LLMProcessingPremise.process_clause(' '.join(statements), use_llm=True)
+formula, variable_map = result["formula"], result["variable_map"]
+rewritten_initial_conditions = formula.replace("\n"," / ").replace(" / ",", ",formula.count(" / ")-1).replace("->","→").translate(str.maketrans("⋀⋁¬","∧∨~"))
 
 print("formula: ", rewritten_initial_conditions)
+print("mapping: ")
+print(json.dumps(variable_map, indent=2))
 
 
 
+
+logics.instances.predicate.languages.metavariables = list(variable_map.keys())
+logics.instances.propositional.languages.metavariables = list(variable_map.keys())
 parsed = classical_parser.parse(rewritten_initial_conditions)
 is_valid = ST.is_valid(parsed)
 if not is_valid:
@@ -32,7 +53,7 @@ unused_formulas = [derivation[i].content for i in unused_args]
 
 print("Propositional map:\n",variable_map)
 
-from logics.instances.propositional.languages import classical_language
+
 print("\nSimplified version:")
 
 # Find and all instances of the unused formulas and remove them. Also remove any premises that consist entirely of unused formulas.
