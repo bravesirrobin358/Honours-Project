@@ -366,9 +366,10 @@ class LLMProcessingPremise:
 
     def _post_processing(self,formula):
         # This function adds the relevant parentheses to sequential binary operators lacking them.
+        print("\n formula: ", formula)
         premises, conclusion = formula.split("/")
         premise_list = premises.strip().split("\n")
-        
+
         premise_done = []
         def fix(premise):
             premise = premise.strip()
@@ -385,7 +386,7 @@ class LLMProcessingPremise:
                 else:
                     props.append(s)
 
-            # Here we traverse backwards through our list of propositions. If a proposition has more closing parentheses than opening parentheses 
+            # Here we traverse backwards through our list of propositions. If a proposition has more closing parentheses than opening parentheses
             # and the proposition earlier in the list by a certain gap has more opening than closing, then we extract this portion of the premise
             # recursively call the fix function with the goal of combining all propositions in this subpremise into 1, with correct parentheses to boot.
             # Once we are done checking proposition pairs of a certain distance apart, we increase the distance check and try again, repeating this
@@ -406,13 +407,13 @@ class LLMProcessingPremise:
                                 operators = operators[:p-gap] + ([] if is_at_end else operators[p:])
                                 p = p-gap+1
                         p -= 1
-                        
+
                 else:
                     break
                 gap += 1
                 if gap == len(props):
                     break
-                    
+
             # Once a premise is out of the recursion loop, we join them in a 'proposition operator proposition' pattern, adding parentheses if they
             # did not previously exist.
             if operators:
@@ -425,6 +426,8 @@ class LLMProcessingPremise:
             else:
                 full_prem = props[0]
             while operators:
+                print(props, operators)
+                print("full_prem: ", full_prem)
                 full_prem = f'{props[-1]} {operators[-1]} {full_prem}'
                 if not (full_prem.startswith('(') and full_prem.endswith(')')):
                     full_prem = '('+full_prem+')'
@@ -432,9 +435,9 @@ class LLMProcessingPremise:
                 operators.pop()
             return full_prem
         for premise in premise_list:
-            
+
             premise_done.append(fix(premise))
-        
+
         return f'{", ".join(premise_done)} / {fix(conclusion)}'
 
 
@@ -478,10 +481,10 @@ class LLMProcessingPremise:
         extract_prompt = f"""
                 Extract atomic propositions from this text in the form of propositional logic.
                 Rules:
-                - Decompose conjunctions (such as the use of 'and') into separate atoms where possible.
-                - Decompose disjunctions into separate atoms where possible.
-                - Keep each atom minimal and declarative.
-                - Keep atoms as positive canonical statements when possible (negation is handled separately).
+                - Decompose AND break apart ALL logical connectives (e.g. 'and', 'or', 'if...then', 'implies', 'neither...nor', 'not').
+                - DO NOT include compound statements (e.g. implications, conjunctions) as atoms.
+                - Keep each atom ABSOLUTELY minimal and declarative.
+                - Keep atoms as positive canonical statements when possible (e.g. "Claim states TST", instead of "neither does Claim states TST").
                 - Resolve obvious pronouns to named entities in context.
                 - Do NOT merge synonymous atoms. Extract all distinct verbalized propositions exactly as written.
                 Return ONLY a JSON object with a key "atoms" containing a list of strings.
@@ -496,7 +499,7 @@ class LLMProcessingPremise:
             print(f"Failed to parse LLM response as JSON: {raw_response}")
             raw_atoms = []
         all_atoms.extend(raw_atoms)
-            
+
 
         if not isinstance(all_atoms, list):
             all_atoms = []
@@ -526,7 +529,7 @@ class LLMProcessingPremise:
             Use ONLY these variable labels:
             "{mapping_str}"
 
-            Use ONLY these operators: '¬', '∧', '∨', '->', '<->'. No first order logic predicates, existential like '∃' or universal quantifiers should be used. 
+            Use ONLY these operators: '¬', '∧', '∨', '->', '<->'. No first order logic predicates, existential like '∃' or universal quantifiers should be used.
             For 'since' and 'because', use cause -> claim.
 
             The conclusion, still having a label, should be separated from the rest of the propositions with a forward slash ' / '.
@@ -535,20 +538,30 @@ class LLMProcessingPremise:
             Text: "{clause_text}"
             """'''
         formula_prompt = f"""
-            Translate the following clause into propositional logic. Do not combine the propositions of multiple sentences, leave them seperate.
+            Translate each sentence in the following text into propositional logic. Give the full list of translated premises separated by commas.
             Use ONLY these variable labels:
             "{mapping_str}"
 
-            Use ONLY these operators: '¬', '∧', '∨', '->', '<->'. No first order logic predicates, existential like '∃' or universal quantifiers should be used. 
+            Use ONLY these operators: '¬', '∧', '∨', '->', '<->'. No first order logic predicates.
             For 'since' and 'because', use cause -> claim.
 
-            The conclusion of the overall text should be separated from the rest of the propositions with a forward slash ' / ' on the right side of it.
+            IMPORTANT: The parsing engine is EXTREMELY strict about parentheses.
+            Rule 1: NEVER write A ∧ B ∧ C. You MUST explicitly parenthesize every single binary operation like this: ((A ∧ B) ∧ C).
+            Rule 2: DO NOT wrap an entire formula in unnecessary outer parentheses. Write P1 -> ¬P3, NOT (P1 -> ¬P3).
+            Rule 3: NEVER wrap a simple negation in parentheses. Write ¬P1, NEVER (¬P1).
 
-            Return ONLY the formula string.
+            Examples:
+            Correct: ((P1 ∧ P6) ∧ P2), P1 -> ¬P3, P2 -> (¬P1 ∨ ¬P4) / P5 ∨ (¬P4 ∧ ¬P3)
+            Incorrect: (P1 ∧ P6 ∧ P2), (P1 -> (¬P3)) / P5 ∨ (¬P4 ∧ ¬P3)
+
+            The entire output should consist of comma-separated premises, followed by EXACTLY ONE forward slash ' / ', followed by the conclusion.
+            You MUST place the forward slash BEFORE the entire final concluding sentence. The conclusion itself may be a compound operation (e.g. ~(P5 ∨ P4)). DO NOT split the conclusion into multiple parts separated by commas or slashes.
+
+            Return ONLY the formula string. Do NOT output anything else. Do not use multiple slashes.
             Text: "{clause_text}"
             """
         formula = self._llm_call(formula_prompt, json_mode=False).strip()
-        formula2 = self._post_processing(formula)
+        formula2 = formula # self._post_processing(formula)
         # ((P1 ∧ P6) ∧ P2) ∧ (P1 → ~P3) ∧ P2 → (~P1 ∨ ~P4) / P5 ∨ (~P4 ∧ ~P3)
         # P1 = I drink beer, P2 = I play hockey, P3=I eat lamb, P4=I gamble, P5=I wrote novels P6 = I play music
         return {
@@ -580,111 +593,111 @@ def run(clause_text=None):
  Chapter 15 governs the release of CAF members from service. CAF officers who enrolled before July 2004, such as the Applicant, are subject to compulsory retirement at age 55 (art 15.17).
  Both of these decisions, discussed in more detail below are referenced in the Notice of Application.
 
-[2] The application for judicial review is dismissed. 
+[2] The application for judicial review is dismissed.
 The application is time-barred, an additional decision is improperly being challenged, and the application is moot.
 
 II. Background
-[3] The Applicant was a member of the CAF who belonged to the Cameron Highlanders of Ottawa (CH of O). 
+[3] The Applicant was a member of the CAF who belonged to the Cameron Highlanders of Ottawa (CH of O).
 The chain of command from most to least superior is as follows: the Commander of the Canadian Army [Commander Canadian Army], Commander 4th Canadian Division [Division Commander], the Brigade Commander, and CH of O Commanding Officer.
 
-[4] The Commander Canadian Army, as a delegate for the Chief of Defence Staff, may approve the retention of an officer in the CAF beyond the compulsory retirement age pursuant to QR&O 15.17(5)(b). 
+[4] The Commander Canadian Army, as a delegate for the Chief of Defence Staff, may approve the retention of an officer in the CAF beyond the compulsory retirement age pursuant to QR&O 15.17(5)(b).
 There is also a streamlined process available for members to request their compulsory retirement age to be 60, if the member requests the change before reaching age 54.
 
-[5] The Applicant reached the compulsory retirement age on August 30, 2022. 
-In December 2022, the CH of O Commanding Officer noticed that the Applicant had reached his compulsory retirement age. 
-A cessation of service form was prepared around this time, which the Applicant and the CH of O Commanding Officer signed on December 15, 2022 [Release Decision]. 
+[5] The Applicant reached the compulsory retirement age on August 30, 2022.
+In December 2022, the CH of O Commanding Officer noticed that the Applicant had reached his compulsory retirement age.
+A cessation of service form was prepared around this time, which the Applicant and the CH of O Commanding Officer signed on December 15, 2022 [Release Decision].
 It was at this time that the Applicant was released from the CAF.
 
 III. Decision
-[6] On December 19, 2022, the Applicant submitted an extension request [Extension Request]. 
-The Division Commander did not send the Extension Request to the Commander Canadian Army due to the view that it lacked any prospect of being approved since it was late. 
-Instead, the Brigade Commander sent a letter to the CH of O Commanding Officer on March 7, 2023 denying the Extension Request and directing the completion of the release administration by March 31, 2023 [Denial Decision]. 
+[6] On December 19, 2022, the Applicant submitted an extension request [Extension Request].
+The Division Commander did not send the Extension Request to the Commander Canadian Army due to the view that it lacked any prospect of being approved since it was late.
+Instead, the Brigade Commander sent a letter to the CH of O Commanding Officer on March 7, 2023 denying the Extension Request and directing the completion of the release administration by March 31, 2023 [Denial Decision].
 The Applicant received the letter on March 20, 2023.
 
-[7] The Applicant filed this application on May 11, 2023. 
-Since commencing this matter, the Brigade Commander sent the Extension Request to the Division Commander for onward transmission to the Commander Canadian Army for a decision. 
+[7] The Applicant filed this application on May 11, 2023.
+Since commencing this matter, the Brigade Commander sent the Extension Request to the Division Commander for onward transmission to the Commander Canadian Army for a decision.
 The Canadian Army Headquarters received the Extension Request on July 13, 2023 and it is awaiting a decision from the Commander Canadian Army.
 
 IV. Preliminary Issue
 A. Is this application time-barred?
-[8] The Respondent submits that this application should be dismissed as the Applicant brought it later than 30 days from the date of the decision being challenged, contrary to subsection 18.1(2) of the Federal Courts Act, RSC 1985, c F-7. 
-The sum of the Applicant’s submissions challenge both the Release Decision and the Denial Decision. 
+[8] The Respondent submits that this application should be dismissed as the Applicant brought it later than 30 days from the date of the decision being challenged, contrary to subsection 18.1(2) of the Federal Courts Act, RSC 1985, c F-7.
+The sum of the Applicant’s submissions challenge both the Release Decision and the Denial Decision.
 However, the Applicant brought the application forward on May 11, 2023, which was more than 30 days after both the Release Decision and the Denial Decision.
 
-[9] The Applicant did not make written submissions on the late filing. 
-At the hearing, the Applicant submitted that he disagreed that his Release Date was December 15, 2022 and he also submitted that he received notice of the Denial Decision in an April 17, 2023 letter. 
+[9] The Applicant did not make written submissions on the late filing.
+At the hearing, the Applicant submitted that he disagreed that his Release Date was December 15, 2022 and he also submitted that he received notice of the Denial Decision in an April 17, 2023 letter.
 The Applicant submitted that the letter attempts to backdate his release.
 
 [10] The Respondent disputed that the April 17, 2023 letter is an attempt to backdate the Applicant’s release and submitted that there is no indication in the Notice of Application that the April 17, 2023 letter is under review and that this letter deals with grievances.
  Accordingly, it is a separate and distinct issue from the matter at issue.
 
-[11] The application concerning the Denial Decision is time-barred. 
+[11] The application concerning the Denial Decision is time-barred.
 The Applicant filed the application more than 30 days after the Denial Decision and failed to bring a motion seeking approval for an extension of time (Meeches v Assiniboine, 2017 FCA 123 at para 33; Canada v Berhad, 2005 FCA 267 at para 60).
 
 B. Is the Release Decision reviewable?
 (1) Applicant’s Position
-[12] The Applicant submits that the authority to approve releases of commissioner officers in the CAF and set their release date lies with the Governor General under article 15.01(3) of the QR&O. 
+[12] The Applicant submits that the authority to approve releases of commissioner officers in the CAF and set their release date lies with the Governor General under article 15.01(3) of the QR&O.
 The Release Decision was an improper release since the CH of O Commanding Officer did not have the Governor General’s approval to set the release date as December 15, 2022.
 
 (2) Respondent’s Position
 [13] The Court should not entertain this argument because the Applicant did not raise the grounds related to the Governor General’s approval in the Notice of Application as required under Rule 301(e) of the Federal Courts Rules, SOR/98-106 [Rules].
- The Federal Court of Appeal has stated that a “complete” statement of grounds means all the legal basis and material facts that, if taken as true, will support granting the relief sought while a “concise” statement of grounds must include the material facts necessary to show that the Court can and should grant the relief sought (Canada (National Revenue) v JP Morgan Asset Management (Canada) Inc, at paras 39-40). 
-This Court has further held that pursuant to Rule 308, it will not consider grounds to be argued that are not invoked in a notice of application, subject to limited exceptions (Boubala v Khwaja, 2023 FC 658 at paras 27-28). 
+ The Federal Court of Appeal has stated that a “complete” statement of grounds means all the legal basis and material facts that, if taken as true, will support granting the relief sought while a “concise” statement of grounds must include the material facts necessary to show that the Court can and should grant the relief sought (Canada (National Revenue) v JP Morgan Asset Management (Canada) Inc, at paras 39-40).
+This Court has further held that pursuant to Rule 308, it will not consider grounds to be argued that are not invoked in a notice of application, subject to limited exceptions (Boubala v Khwaja, 2023 FC 658 at paras 27-28).
 The limited exceptions do not apply to this matter as the Applicant prejudiced the Respondent by not identifying this submission in the Notice of Application.
 
-[14] Alternatively, the CH of O Commanding Officer had authority to recommend the Applicant’s release to the Governor General. 
+[14] Alternatively, the CH of O Commanding Officer had authority to recommend the Applicant’s release to the Governor General.
 In the event that the Applicant is correct that he is not released until the Governor General approves the release, then the challenge regarding the Release Decision is premature, as the military grievance system has been recognized as an adequate alternative remedy.
 
 (3) Conclusion
-[15] I agree with the Respondent that the Notice of Application does not set out a complete and concise statement of grounds to challenge the Release Decision, particularly with respect to the required approval by the Governor General. 
-From a simple reading, the focus in the Notice of Application appears to be on the Denial Decision, however, the Applicant’s written and oral submissions relate to both the Release Decision and the Denial Decision. 
-The Applicant submits that the only authority that could approve his release was the Governor General. 
+[15] I agree with the Respondent that the Notice of Application does not set out a complete and concise statement of grounds to challenge the Release Decision, particularly with respect to the required approval by the Governor General.
+From a simple reading, the focus in the Notice of Application appears to be on the Denial Decision, however, the Applicant’s written and oral submissions relate to both the Release Decision and the Denial Decision.
+The Applicant submits that the only authority that could approve his release was the Governor General.
 I agree with the Respondent that this was not raised in the Notice of Application and that the Respondent is prejudiced.
 
-[16] The Court does have discretion, where relevant matters have arisen after the filing of the notice of application; the new issues have some merit, are related to those set out in the notice of application and are supported by the evidentiary record; the respondent would not be prejudiced; and no undue delay would result (Tl’azt’en Nation v Sam, 2013 FC 226 at paras 6-7, citing Al Mansuri v Canada (Public Safety and Emergency Preparedness), 2007 FC 22 at paras 12-13). 
-Apart from the submission related to the Governor General’s approval, I also note that the Release Decision itself was made months prior to the Denial Decision, as the Denial Decision itself is the result of a request to extend the date decided upon in the Release Decision. 
+[16] The Court does have discretion, where relevant matters have arisen after the filing of the notice of application; the new issues have some merit, are related to those set out in the notice of application and are supported by the evidentiary record; the respondent would not be prejudiced; and no undue delay would result (Tl’azt’en Nation v Sam, 2013 FC 226 at paras 6-7, citing Al Mansuri v Canada (Public Safety and Emergency Preparedness), 2007 FC 22 at paras 12-13).
+Apart from the submission related to the Governor General’s approval, I also note that the Release Decision itself was made months prior to the Denial Decision, as the Denial Decision itself is the result of a request to extend the date decided upon in the Release Decision.
 Accordingly, the Release Decision is not properly before the Court.
 
 [17] Furthermore, the Applicant has not made submissions on the Release Decision and the Denial Decision being a continuing course of conduct that would be an exception to Rule 302 that an applicant can only challenge one decision (Rules; David Suzuki Foundation v Canada (Health), 2018 FC 380 at para 173).
 
-[18] In response to the Respondent’s alternative submissions, I note that neither party has provided sufficient evidence of the alternative remedy through the grievance process to determine its adequacy. 
-Neither party has provided evidence on when the grievance process is available. 
-There is no evidence on whether the Governor General has signed the Release Decision. 
-The Respondent included a copy of the Release Decision as an exhibit to the affidavit of Stephane Tremblay, which the Commander CH of O and the Applicant have signed but not the Governor General. 
-The Respondent submits that it would be available if the Governor General has not yet signed the release as the approving authority. 
-However, the Applicant has submitted evidence that a grievance filed on March 30, 2023 was not actioned as he was no longer a member of CAF. 
+[18] In response to the Respondent’s alternative submissions, I note that neither party has provided sufficient evidence of the alternative remedy through the grievance process to determine its adequacy.
+Neither party has provided evidence on when the grievance process is available.
+There is no evidence on whether the Governor General has signed the Release Decision.
+The Respondent included a copy of the Release Decision as an exhibit to the affidavit of Stephane Tremblay, which the Commander CH of O and the Applicant have signed but not the Governor General.
+The Respondent submits that it would be available if the Governor General has not yet signed the release as the approving authority.
+However, the Applicant has submitted evidence that a grievance filed on March 30, 2023 was not actioned as he was no longer a member of CAF.
 In light of the insufficient submissions, the Court will not address this matter.
 
 C. Is this application moot?
-[19] There is a two-stage analysis when mootness is raised: (1) whether the proceeding is indeed moot, meaning whether a live controversy remains that affects or may affect the rights of the parties; and (2) whether the Court should nonetheless exercise its discretion to hear and decide it (Borowski; Democracy Watch v Canada (Attorney General), 2018 FCA 195 at para 10 [Democracy Watch]). 
+[19] There is a two-stage analysis when mootness is raised: (1) whether the proceeding is indeed moot, meaning whether a live controversy remains that affects or may affect the rights of the parties; and (2) whether the Court should nonetheless exercise its discretion to hear and decide it (Borowski; Democracy Watch v Canada (Attorney General), 2018 FCA 195 at para 10 [Democracy Watch]).
 The second stage of analysis involves considering the requirement of an adversarial context; the concern for judicial economy; and the need for the court to respect its proper law-making function and its role as the adjudicative branch of our political framework (Borowski at 358-363; Yahaan v Canada, 2018 FCA 41 at para 32).
 
-[20] The Respondent submits that the Extension Request has since been sent to the Commander Canadian Army for a decision. 
-The challenge of the Denial Decision is moot for lack of a live controversy, which will or may affect the rights of the parties to the litigation (Borowski v Canada (Attorney General), 1989 CanLII 123 (SCC) at 353 [Borowski]; Doucet-Boudreau v Nova Scotia (Minister of Education), 2003 SCC 62 at para 17). 
-The Respondent acknowledges that the Denial Decision was made by an individual who did not have the delegated authority to make it. 
-The Extension Request has since been sent to the Commander Canadian Army for a decision, which is the proper authority. 
+[20] The Respondent submits that the Extension Request has since been sent to the Commander Canadian Army for a decision.
+The challenge of the Denial Decision is moot for lack of a live controversy, which will or may affect the rights of the parties to the litigation (Borowski v Canada (Attorney General), 1989 CanLII 123 (SCC) at 353 [Borowski]; Doucet-Boudreau v Nova Scotia (Minister of Education), 2003 SCC 62 at para 17).
+The Respondent acknowledges that the Denial Decision was made by an individual who did not have the delegated authority to make it.
+The Extension Request has since been sent to the Commander Canadian Army for a decision, which is the proper authority.
 There is also no adversarial context and it would not be a useful expenditure of scarce judicial resources to canvas this issue further.
 
-[21] On the first stage of the analysis, I agree with the Respondent that there is not a live issue before this Court. 
-The appropriate remedy if the Denial Decision is unreasonable or procedurally unfair would be to quash and remit the matter to the appropriate authority, however, the matter is already with the Commander Canadian Army for review. 
+[21] On the first stage of the analysis, I agree with the Respondent that there is not a live issue before this Court.
+The appropriate remedy if the Denial Decision is unreasonable or procedurally unfair would be to quash and remit the matter to the appropriate authority, however, the matter is already with the Commander Canadian Army for review.
 The discussion on remedies is set out below as to why the other relief sought by the Applicant is not appropriate.
 
-[22] As to the second stage, I find that the Court should not exercise its discretion to hear a moot application. 
-First, there is no longer an adversarial context. 
-An adversarial context persists where the “litigants have continued to argue their respective sides vigorously” or where “both sides, represented by counsel, take opposing positions” (Boland v Canada (Attorney General), 2024 FC 11 at para 25). 
+[22] As to the second stage, I find that the Court should not exercise its discretion to hear a moot application.
+First, there is no longer an adversarial context.
+An adversarial context persists where the “litigants have continued to argue their respective sides vigorously” or where “both sides, represented by counsel, take opposing positions” (Boland v Canada (Attorney General), 2024 FC 11 at para 25).
 The Respondent concedes that the Denial Decision was made without the appropriate authority, which is why the matter is now with the Commander Canadian Army.
 
-[23] Second, it would be a waste of scarce judicial resources. 
-The decision would have no practical effect on the Applicant’s rights. 
-This is not a situation that can evade review from Court since it is not of a recurring nature but brief duration and it is not of public importance of which a resolution is in the public interest (Borowski at 360-361). 
-The Court must be sensitive of not pronouncing judgments in the absence of a dispute affecting the rights of the parties as it may be viewed as intruding into the role of the legislative branch (Borowski at 362). 
+[23] Second, it would be a waste of scarce judicial resources.
+The decision would have no practical effect on the Applicant’s rights.
+This is not a situation that can evade review from Court since it is not of a recurring nature but brief duration and it is not of public importance of which a resolution is in the public interest (Borowski at 360-361).
+The Court must be sensitive of not pronouncing judgments in the absence of a dispute affecting the rights of the parties as it may be viewed as intruding into the role of the legislative branch (Borowski at 362).
 The Court’s primary role is to resolve real disputes (Democracy Watch at para 14). In light of the Borowski factors, it is my view that this matter is not an appropriate case for the Court to exercise its discretion to decide a moot case on its merits.
 
 [24] It is not necessary to proceed further and review the merits of the decision.
 
 V. Conclusions
-[25] For the reasons above, this application for judicial review is dismissed. 
-The application was filed later than 30 days after the date of the Denial Decision, another decision sought to be challenged is improperly before the Court, and this matter is also moot. 
+[25] For the reasons above, this application for judicial review is dismissed.
+The application was filed later than 30 days after the date of the Denial Decision, another decision sought to be challenged is improperly before the Court, and this matter is also moot.
 It is not appropriate for the Court to exercise its discretion to hear and decide the application on its merits.
 """
     ]'''

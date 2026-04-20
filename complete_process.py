@@ -24,7 +24,20 @@ for s in statements:
 LLMProcessingPremise = premise_to_proposition.LLMProcessingPremise(model_name="llama3.1")
 result = LLMProcessingPremise.process_clause(' '.join(statements), use_llm=True)
 formula, variable_map = result["formula"], result["variable_map"]
-rewritten_initial_conditions = formula.replace("\n"," / ").replace(" / ",", ",formula.count(" / ")-1).replace("->","→").translate(str.maketrans("⋀⋁¬","∧∨~"))
+# Post-process formula string to ensure formatting
+import re
+formula = formula.replace("->", "→").translate(str.maketrans("⋀⋁¬", "∧∨~"))
+# removing bad parens around negations e.g. (~P2) -> ~P2
+formula = re.sub(r'\(\s*(~P\d+)\s*\)', r'\1', formula)
+# Make sure conclusions and things have outer parentheses if they don't
+if "/" in formula:
+    premises_str, conclusion_str = formula.split("/", 1)
+    premises = [p.strip() for p in re.split(r',|\n', premises_str) if p.strip()]
+    
+    rewritten_initial_conditions = ", ".join(premises) + " / " + conclusion_str.strip()
+else:
+    rewritten_initial_conditions = formula
+rewritten_initial_conditions = re.sub(r'\s+', ' ', rewritten_initial_conditions)
 
 print("formula: ", rewritten_initial_conditions)
 print("mapping: ")

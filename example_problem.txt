@@ -1,1 +1,4 @@
-I drink beer and I play music and play hockey. If I drink beer, then I do not eat lamb. If I play hockey, then either I do not drink beer or I do not gamble. In conclusion, neither do I gamble nor do I eat lamb.
+Judge amends issue and the defendant is E2M and the defendant offered an ATIS Alert.
+If Judge amends issue, then there is no wrong-doing.
+If the defendant offered an ATIS Alert, implies no Judge amends issue or no Claim states TST.
+In conclusion, neither does Claim states TST nor is there wrong-doing.
