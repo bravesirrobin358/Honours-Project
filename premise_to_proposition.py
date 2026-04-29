@@ -366,11 +366,13 @@ class LLMProcessingPremise:
 
     def _post_processing(self,formula):
         # This function adds the relevant parentheses to sequential binary operators lacking them.
-        print("\n formula: ", formula)
         premises, conclusion = formula.split("/")
-        premise_list = premises.strip().split("\n")
+        premise_list = [prem for prem in premises.strip().split(",") if prem]
 
         premise_done = []
+        def parentheses_check(premise):
+            return (premise.startswith('(') or premise.startswith('¬')) and premise.endswith(')')
+
         def fix(premise):
             premise = premise.strip()
             full_prem = ""
@@ -418,7 +420,7 @@ class LLMProcessingPremise:
             # did not previously exist.
             if operators:
                 full_prem = f'{props[-2]} {operators[-1]} {props[-1]}'
-                if not (full_prem.startswith('(') and full_prem.endswith(')')):
+                if not parentheses_check(full_prem):
                     full_prem = '('+full_prem+')'
                 props.pop()
                 props.pop()
@@ -426,19 +428,17 @@ class LLMProcessingPremise:
             else:
                 full_prem = props[0]
             while operators:
-                print(props, operators)
-                print("full_prem: ", full_prem)
                 full_prem = f'{props[-1]} {operators[-1]} {full_prem}'
-                if not (full_prem.startswith('(') and full_prem.endswith(')')):
+                if not parentheses_check(full_prem):
                     full_prem = '('+full_prem+')'
                 props.pop()
                 operators.pop()
             return full_prem
         for premise in premise_list:
 
-            premise_done.append(fix(premise))
+            premise_done.append(fix(premise)[1:-1])
 
-        return f'{", ".join(premise_done)} / {fix(conclusion)}'
+        return f'{", ".join(premise_done)} / {fix(conclusion)[1:-1]}'
 
 
 
@@ -561,7 +561,8 @@ class LLMProcessingPremise:
             Text: "{clause_text}"
             """
         formula = self._llm_call(formula_prompt, json_mode=False).strip()
-        formula2 = formula # self._post_processing(formula)
+        print("initial LLM output:", formula)
+        formula2 = self._post_processing(formula)
         # ((P1 ∧ P6) ∧ P2) ∧ (P1 → ~P3) ∧ P2 → (~P1 ∨ ~P4) / P5 ∨ (~P4 ∧ ~P3)
         # P1 = I drink beer, P2 = I play hockey, P3=I eat lamb, P4=I gamble, P5=I wrote novels P6 = I play music
         return {
