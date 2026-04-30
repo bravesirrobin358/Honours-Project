@@ -1,16 +1,18 @@
-Install Ollama via Website or using this command:
+To run this program, follow these instructions:
+
+1. Install Ollama via Website or using this command:
     winget install Ollama.Ollama
-Pull this version:
+2. Pull this version:
     ollama pull llama3.1:8b
+3. Run the model in your terminal with
+    ollama run llama3.1
+4. Install the project requirements
+    pip install -r requirements.txt
+5. Execute the program with the desired file
+    python complete_process.y <path to desired file>
 
 
-## Citations
-- https://ieeexplore-ieee-org.proxy.bib.uottawa.ca/document/11005321
-- 
-- https://www.semanticscholar.org/paper/Semantic-Interpretation-of-Prepositions-for-NLP-Hartrumpf-Helbig/afde0c472125bdccc64415e23309953a18818953
-
-cff-version: 1.0.1
-message: "If you use this software, please cite it as below."
+Citations:
 authors:
 - family-names: "Roffé"
   given-names: "Ariel Jonathan"
